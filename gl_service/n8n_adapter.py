@@ -1,9 +1,56 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Any
 
 from .models import Attachment, Email
+
+
+_SIZE_RE = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s*([a-zA-Z]{0,3})\s*$")
+
+
+def _coerce_file_size(value: Any) -> int | None:
+    """
+    n8n binary.attachment_0.fileSize может быть:
+    - int (bytes)
+    - str вида '121 kB', '2.3 MB', '1024'
+    Возвращаем bytes (int) или None.
+    """
+
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return None
+        # pure int as string
+        if s.isdigit():
+            try:
+                return int(s)
+            except Exception:
+                return None
+        m = _SIZE_RE.match(s)
+        if not m:
+            return None
+        num_s, unit = m.group(1), (m.group(2) or "B").lower()
+        num = float(num_s.replace(",", "."))
+        # SI units (kB/MB/GB) are common in UI. Accept KiB/MiB too.
+        mul = {
+            "b": 1,
+            "kb": 1000,
+            "mb": 1000**2,
+            "gb": 1000**3,
+            "kib": 1024,
+            "mib": 1024**2,
+            "gib": 1024**3,
+        }.get(unit, 1)
+        return int(num * mul)
+    return None
 
 
 def _coerce_email_field(value: Any) -> str:
@@ -74,7 +121,7 @@ def email_from_n8n_item(item: dict) -> Email:
         att = Attachment(
             file_name=a0.get("fileName") or "attachment",
             mime_type=a0.get("mimeType") or "application/octet-stream",
-            file_size=a0.get("fileSize"),
+            file_size=_coerce_file_size(a0.get("fileSize")),
             file_extension=a0.get("fileExtension"),
             data_base64=a0.get("data"),
         )
