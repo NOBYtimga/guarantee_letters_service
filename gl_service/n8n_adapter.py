@@ -1,8 +1,48 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from .models import Attachment, Email
+
+
+def _coerce_email_field(value: Any) -> str:
+    """
+    n8n Gmail может отдавать from/to как строку или как объект:
+    {
+      "value": [{"address": "...", "name": "..."}],
+      "text": "Name <email@example.com>"
+    }
+    """
+
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        text = value.get("text")
+        if isinstance(text, str) and text.strip():
+            return text
+        vals = value.get("value")
+        if isinstance(vals, list) and vals:
+            parts: list[str] = []
+            for v in vals:
+                if isinstance(v, str) and v.strip():
+                    parts.append(v.strip())
+                    continue
+                if isinstance(v, dict):
+                    addr = v.get("address") or ""
+                    name = v.get("name") or ""
+                    if addr and name:
+                        parts.append(f'{name} <{addr}>')
+                    elif addr:
+                        parts.append(str(addr))
+            return ", ".join([p for p in parts if p])
+    # fallback: best-effort stringification
+    try:
+        return str(value)
+    except Exception:
+        return ""
 
 
 def email_from_n8n_item(item: dict) -> Email:
@@ -43,8 +83,8 @@ def email_from_n8n_item(item: dict) -> Email:
         id=str(js.get("id") or ""),
         thread_id=js.get("threadId"),
         subject=js.get("subject") or "",
-        **{"from": js.get("from") or ""},  # alias
-        to=js.get("to"),
+        **{"from": _coerce_email_field(js.get("from"))},  # alias
+        to=_coerce_email_field(js.get("to")),
         date=dt,
         snippet=js.get("snippet") or "",
         label_ids=js.get("labelIds"),
