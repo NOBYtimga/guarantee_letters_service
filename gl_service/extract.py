@@ -34,13 +34,23 @@ def guess_mode(att: Attachment) -> ExtractMode:
 def extract_from_attachment(att: Attachment) -> Extracted:
     raw = _decode_base64(att.data_base64)
     mode = guess_mode(att)
+    
+    # Диагностика
+    print(f"📦 File: {att.file_name}")
+    print(f"📦 Size after decode: {len(raw)} bytes")
+    print(f"📦 First 30 bytes: {raw[:30]}")
+    print(f"📦 Mode: {mode}")
 
     if mode == "pdf":
         try:
             text = pdf_extract_text(io.BytesIO(raw)) or ""
+            print(f"📦 PDF text extracted: {len(text)} chars")
+            if not text.strip():
+                print("⚠️ PDF parsed but text is empty!")
             return Extracted(mode=mode, text=text.strip(), mime_type=att.mime_type, raw_bytes=raw)
-        except Exception:
+        except Exception as e:
             # PDF поврежден или это не PDF — отправляем как inline_data в Gemini
+            print(f"❌ PDF extraction failed: {e}")
             return Extracted(mode="other", text=None, mime_type=att.mime_type, raw_bytes=raw)
 
     if mode == "rtf":

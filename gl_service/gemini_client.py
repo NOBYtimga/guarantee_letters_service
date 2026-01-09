@@ -72,6 +72,12 @@ async def gemini_generate_from_inline_file(
         raise GeminiError("GL_GEMINI_API_KEY is not set")
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent"
+    
+    # Диагностика
+    print(f"🤖 Sending to Gemini: {len(file_bytes)} bytes, mime={mime_type}")
+    print(f"🤖 First 30 bytes: {file_bytes[:30]}")
+    encoded = base64.b64encode(file_bytes).decode("ascii")
+    print(f"🤖 Base64 length: {len(encoded)} chars")
 
     payload = {
         "contents": [
@@ -81,7 +87,7 @@ async def gemini_generate_from_inline_file(
                     {
                         "inline_data": {
                             "mime_type": mime_type or "application/octet-stream",
-                            "data": base64.b64encode(file_bytes).decode("ascii"),
+                            "data": encoded,
                         }
                     },
                 ]
@@ -93,6 +99,7 @@ async def gemini_generate_from_inline_file(
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(url, params={"key": settings.gemini_api_key}, json=payload)
         if resp.status_code >= 400:
+            print(f"❌ Gemini error: {resp.text}")
             raise GeminiError(f"Gemini HTTP {resp.status_code}: {resp.text}")
         data = resp.json()
 
