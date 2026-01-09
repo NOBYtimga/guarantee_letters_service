@@ -36,16 +36,24 @@ def extract_from_attachment(att: Attachment) -> Extracted:
     mode = guess_mode(att)
 
     if mode == "pdf":
-        text = pdf_extract_text(io.BytesIO(raw)) or ""
-        return Extracted(mode=mode, text=text.strip(), mime_type=att.mime_type, raw_bytes=raw)
+        try:
+            text = pdf_extract_text(io.BytesIO(raw)) or ""
+            return Extracted(mode=mode, text=text.strip(), mime_type=att.mime_type, raw_bytes=raw)
+        except Exception:
+            # PDF поврежден или это не PDF — отправляем как inline_data в Gemini
+            return Extracted(mode="other", text=None, mime_type=att.mime_type, raw_bytes=raw)
 
     if mode == "rtf":
-        # RTF часто в cp1251/ansi; striprtf работает по строке — декодируем максимально мягко
-        decoded = raw.decode("utf-8", errors="ignore")
-        if not decoded.strip():
-            decoded = raw.decode("cp1251", errors="ignore")
-        text = rtf_to_text(decoded) or ""
-        return Extracted(mode=mode, text=text.strip(), mime_type=att.mime_type, raw_bytes=raw)
+        try:
+            # RTF часто в cp1251/ansi; striprtf работает по строке — декодируем максимально мягко
+            decoded = raw.decode("utf-8", errors="ignore")
+            if not decoded.strip():
+                decoded = raw.decode("cp1251", errors="ignore")
+            text = rtf_to_text(decoded) or ""
+            return Extracted(mode=mode, text=text.strip(), mime_type=att.mime_type, raw_bytes=raw)
+        except Exception:
+            # RTF поврежден — отправляем как inline_data в Gemini
+            return Extracted(mode="other", text=None, mime_type=att.mime_type, raw_bytes=raw)
 
     # other: текст не извлекаем, остаётся base64/inline_data для Gemini
     return Extracted(mode=mode, text=None, mime_type=att.mime_type, raw_bytes=raw)
