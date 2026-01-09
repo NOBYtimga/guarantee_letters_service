@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse
 
 from gl_service.api_models import N8nItemsRequest, N8nItemsResponse, N8nSendResponse
 from gl_service.n8n_adapter import email_from_n8n_item
@@ -23,6 +24,15 @@ def require_api_key(x_api_key: str | None = Header(default=None, alias="X-API-Ke
         return
     if x_api_key != settings.api_key:
         raise HTTPException(status_code=401, detail="Invalid API key")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_request, exc: Exception):
+    # Чтобы n8n показывал причину 500 (на проде можно сузить/убрать).
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error": str(exc), "type": exc.__class__.__name__},
+    )
 
 
 @app.get("/health")
