@@ -35,16 +35,22 @@ async def step_analyze_attachment(email: Email) -> tuple[GuaranteeDocExtract | N
     if email.attachment is None:
         return None, None
 
-    extracted = extract_from_attachment(email.attachment)
-    ai = await analyze_document_with_gemini(
-        doc_text=extracted.text,
-        file_bytes=None if extracted.text is not None else extracted.raw_bytes,
-        mime_type=extracted.mime_type,
-        subject=email.subject,
-        snippet=email.snippet,
-        parser=parse_gemini_json_text,
-    )
-    return ai, email.attachment
+    try:
+        extracted = extract_from_attachment(email.attachment)
+        ai = await analyze_document_with_gemini(
+            doc_text=extracted.text,
+            file_bytes=None if extracted.text is not None else extracted.raw_bytes,
+            mime_type=extracted.mime_type,
+            subject=email.subject,
+            snippet=email.snippet,
+            parser=parse_gemini_json_text,
+        )
+        return ai, email.attachment
+    except Exception as e:
+        # Если вложение не удалось обработать (поврежден, пуст и т.д.)
+        return GuaranteeDocExtract(
+            summary=f"⚠️ Не удалось обработать вложение '{email.attachment.file_name}': {str(e)}"
+        ), email.attachment
 
 
 def step_no_attachment_fallback(email: Email) -> GuaranteeDocExtract:
